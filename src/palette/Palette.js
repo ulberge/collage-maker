@@ -6,12 +6,8 @@ import PaletteItem from './PaletteItem';
 
 export default class Palette extends React.PureComponent {
 
-  render() {
-    console.log('Palette render');
-    const { pieces, src, onPieceReady, processedPieces, placedPieces, togglePiece, selectionScale } = this.props;
-
-    const processEls = pieces.map(piece => <Grid key={'process' + piece.id} item xs={4}><PaletteItem piece={piece} src={src} onPieceReady={onPieceReady} selectionScale={selectionScale} /></Grid>);
-
+  getDisplayEls = () => {
+    const { pieces, processedPieces, placedPieces, togglePiece } = this.props;
     const reverse = pieces.slice();
     reverse.reverse();
     const displayEls = reverse.map(piece => {
@@ -32,12 +28,25 @@ export default class Palette extends React.PureComponent {
       }
       return (<Grid key={'display' + piece.id} item xs={4}><img onClick={() => togglePiece(piece.id)} style={style} src={processedPieces[piece.id].dataURL} alt="piece"/></Grid>)
     });
+    return displayEls;
+  }
 
+  getProcessEls = () => {
+    const { pieces, src, onPieceReady, selectionScale } = this.props;
+    const processEls = pieces.map(piece => (
+      <Grid key={'process' + piece.id} item xs={4}>
+        <PaletteItem piece={piece} src={src} onPieceReady={onPieceReady} selectionScale={selectionScale} />
+      </Grid>
+    ));
+    return processEls;
+  }
+
+  render() {
     return (
       <Grid container spacing={16}>
-        {displayEls}
+        {this.getDisplayEls()}
         <div style={{ position: 'absolute', left: '-10000px'}} >
-          {processEls}
+          {this.getProcessEls()}
         </div>
       </Grid>
     );

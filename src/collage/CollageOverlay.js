@@ -3,10 +3,7 @@ import ReactDOM from 'react-dom';
 
 import { fabric } from 'fabric';
 
-export default class Overlay extends React.Component {
-  // pieces={pieces}
-  // processedPieces={processedPieces}
-  // src={src}
+export default class CollageOverlay extends React.Component {
 
   componentDidMount() {
     const node = ReactDOM.findDOMNode(this);
@@ -23,6 +20,7 @@ export default class Overlay extends React.Component {
     const container = node.parentNode.parentElement;
     this.w = container.clientWidth;
     this.h = container.clientHeight;
+    this.ratio = this.h / this.w;
     this.scale = this.w;
     node.width = this.w;
     node.height = this.h;
@@ -38,6 +36,8 @@ export default class Overlay extends React.Component {
     });
     this.canvas.selection = false;
 
+    window.addEventListener('resize', this.onWindowResize, false);
+
     this.renderPieces();
   }
 
@@ -48,7 +48,7 @@ export default class Overlay extends React.Component {
       return true;
     }
 
-    // if the placedPieces are the same
+    // if the placedPieces are not the same
     if (placedPieces.length !== nextProps.placedPieces.length) {
       return true;
     }
@@ -57,18 +57,18 @@ export default class Overlay extends React.Component {
       const { id, selected } = piece;
 
       const { dataURL } = processedPieces[id];
-      // if the dataURLS are the same
+      // if the dataURLS are not the same
       if (dataURL !== nextProps.processedPieces[id].dataURL) {
         return true;
       }
 
-      // if selection is not the same
+      // if selection is not not the same
       if (selected !== nextProps.pieces[i].selected) {
         return true;
       }
     });
 
-    // if the scale is the same
+    // if the scale is not the same
     if (scale !== nextProps.scale) {
       return true;
     }
@@ -79,7 +79,7 @@ export default class Overlay extends React.Component {
 
   componentDidUpdate() {
     this.canvas.clear();
-    // keep track to prevent old async renders from still happening
+    // Keep track of renders to prevent old async renders from still happening (image load is async)
     if (this.currentRenderIndex === undefined) {
       this.currentRenderIndex = -1;
     }
@@ -88,47 +88,29 @@ export default class Overlay extends React.Component {
   }
 
   checkOverlap = options => {
-    // check if there is an edge of any other triangle near it
-    // if (Math.round(options.target.left / grid * 4) % 4 == 0 &&
-    //   Math.round(options.target.top / grid * 4) % 4 == 0) {
-    //   options.target.set({
-    //     left: Math.round(options.target.left / grid) * grid,
-    //     top: Math.round(options.target.top / grid) * grid
-    //   }).setCoords();
-    // }
     options.target.setCoords();
-    // const targetPiece = pieces[id];
-    const targetCoords = this.getCoords(options.target);
+
+    // Remove all the overlaps on this piece, because it is now brought to the front
     options.target.overlaps = {};
+
+    // Find all the overlaps between the object last moved and any other triangle
+    // The last moved piece is brought to the front, so add overlaps to those underneath
+    const targetCoords = this.getCoords(options.target);
     this.canvas.forEachObject((obj) => {
-      if (obj === options.target) return;
-      if (!obj.overlaps) {
-        obj.overlaps = [];
-      }
+      if (obj === options.target) return; // Do not check overlaps with itself
 
       const otherCoords = this.getCoords(obj);
-
-      // if (this.triangle2triangleHasOverlap(targetCoords, otherCoords)) {
-      //   if (!obj.overlaps.includes(id)) {
-      //     obj.overlaps.push(id);
-      //   }
-      // } else {
-      //   const i = obj.overlaps.indexOf(id);
-      //   if (i > -1) {
-      //     // remove
-      //     obj.overlaps.splice(i, 1);
-      //   }
-      // }
-
       const overlap = this.triangle2triangleIntersection(targetCoords, otherCoords, obj.angle);
+      console.log(overlap);
       if (overlap) {
-        obj.overlaps[options.target._collage_id] = overlap;
+        obj.overlaps[options.target._collage_id] = overlap; // Add an overlap between these pieces to bottom
       } else if (obj.overlaps[options.target._collage_id] !== undefined) {
-        delete obj.overlaps[options.target._collage_id];
+        delete obj.overlaps[options.target._collage_id]; // If no overlap, remove any that is recorded
       }
     });
   }
 
+  // Get the coords of the triangle from the bounding coords
   getCoords = triangle => {
     const { mt, bl, br } = triangle.oCoords;
     const nCoords = [
@@ -140,10 +122,11 @@ export default class Overlay extends React.Component {
   }
 
   renderPieces = renderIndex => {
-    const { pieces, processedPieces, placedPieces } = this.props;
+    const { pieces, processedPieces, placedPieces, scale } = this.props;
 
     this.triangles = [];
-    pieces.forEach(piece => {
+    let newPieceCount = 0;
+    pieces.forEach((piece, i) => {
       const { id } = piece;
       // Not processed or placed
       if (!processedPieces[id] || !placedPieces.includes(id)) {
@@ -152,21 +135,26 @@ export default class Overlay extends React.Component {
 
       const { dataURL } = processedPieces[id];
       // Set to defaults unless we have created data for it
-      const { x, y, r, overlaps } = this.placedPiecesData[id] ? this.placedPiecesData[id] : { x: 0.5, y: 0.5, r: 0, overlaps: {} };
+      let data;
+      if (this.placedPiecesData[id]) {
+        data = this.placedPiecesData[id]
+      } else {
+        // new piece
+        data = { x: 5 * scale + (0.01 * newPieceCount), y: 4 * scale + (0.002 * newPieceCount), r: 0, overlaps: {} };
+        newPieceCount++;
+      }
 
+      const { x, y, r, overlaps } = data;
       this.createTriangle(id, x, y, r, overlaps, dataURL, triangle => {
         if (this.currentRenderIndex !== renderIndex) {
-          // delayed async call, dont do
+          // stale async call, dont do
           return;
         }
         this.canvas.add(triangle);
         this.triangles.push(triangle);
-        // triangle.set('opacity', triangle.overlaps && Object.keys(triangle.overlaps).length > 0 ? 0.6 : 1);
-        // triangle.set('cornerSize', triangle.overlaps && Object.keys(triangle.overlaps).length > 0 ? 25 : 15);
 
-        // Set selected
+        // Set selected piece
         if (piece.selected) {
-          // console.log('select', piece.id);
           this.canvas.setActiveObject(triangle);
         }
       });
@@ -174,19 +162,16 @@ export default class Overlay extends React.Component {
   }
 
   queueUpdate = options => {
-    console.log('queue update');
     this.updateDelayed = () => this.updatePieces(options);
   }
 
   doQueue = () => {
     if (this.updateDelayed) {
-      console.log('do queue');
       this.updateDelayed();
     }
   }
 
   cancelUpdate = () => {
-    console.log('dont update!');
     this.updateDelayed = false;
   }
 
@@ -221,7 +206,7 @@ export default class Overlay extends React.Component {
     const { scale } = this.props;
 
     fabric.Image.fromURL(dataURL, triangle => {
-      triangle.scale(scale / 20).set({
+      triangle.scale(this.scale * scale / 20).set({
         left: x * this.scale,
         top: y * this.scale,
         originY: 'center',
@@ -232,6 +217,10 @@ export default class Overlay extends React.Component {
         cornerColor: 'rgba(0,0,0,0.7)',
         borderColor: 'rgba(0,0,0,0.5)',
       });
+
+      // var filter = new fabric.Image.filters.Grayscale();
+      // triangle.filters.push(filter);
+      // triangle.applyFilters();
 
       triangle.setControlVisible('bl', false);
       triangle.setControlVisible('br', false);
@@ -253,10 +242,12 @@ export default class Overlay extends React.Component {
   triangle2triangleIntersection = (top, bottom, bottomAngle) => {
     // for each line, check the lines in the other triangle
     const intersections = [];
+    // For each line in the top
     for (let i = 0; i < 3; i += 1) {
       const p0 = top[i];
       const p1 = top[(i + 1) % 3];
 
+      // For each line in the bottom
       for (let j = 0; j < 3; j += 1) {
         const p2 = bottom[j];
         const p3 = bottom[(j + 1) % 3];
@@ -268,56 +259,80 @@ export default class Overlay extends React.Component {
     }
 
     const pointsInside = [];
-    if (intersections.length === 2) {
+
+    // There should be 0, 2, 4, or 6 intersections
+    if (intersections.length === 0) {
+      return false;
+    }
+
+    // figure out shapes of intersection
+    let newShape;
+    if (intersections.length === 6) {
+      newShape = [intersections[0], intersections[1], intersections[2], intersections[3], intersections[4], intersections[5]];
+    } else if (intersections.length === 4) {
+      newShape = [intersections[0], intersections[1], intersections[2], intersections[3]];
+    } else if (intersections.length === 2) {
       // There should be 2 intersections
       // Find the 1 or 2 points inside
-      top.forEach((v, i) => {
+      top.forEach(v => {
         // is it inside bottom?
         if (this.pointInTriangle(v, bottom)) {
-          pointsInside.push({i, v});
+          pointsInside.push(v);
         }
       });
-      bottom.forEach((v, i) => {
+      bottom.forEach(v => {
         // is it inside bottom?
         if (this.pointInTriangle(v, top)) {
-          pointsInside.push({i, v});
+          pointsInside.push(v);
         }
       });
 
-      let newShape;
       if (pointsInside.length === 1) {
         newShape = intersections.concat(pointsInside);
       } else if (pointsInside.length === 2) {
         newShape = [intersections[0], pointsInside[0], intersections[1], pointsInside[1]];
       }
-
-      // translate shapes points into polar coordinates relative to bottom triangle
-      const topTip = bottom[0];
-      const scale = this.distBetweenPoints(bottom[0], bottom[1])
-      const newShapePolar = [];
-      newShape.forEach(v => {
-        let p = v;
-        if (v.v) {
-          p = v.v;
-        }
-
-        // scale by triangle size
-        const dist = this.distBetweenPoints(p, topTip) / scale;
-
-        // console.log((Math.PI * (bottomAngle / 180)), this.angleBetweenPoints(p, topTip));
-        //const angle = (Math.PI * (bottomAngle / 180)) + this.angleBetweenPoints(p, topTip);
-        const angle = -(Math.PI * (bottomAngle / 180)) + this.angleBetweenPoints(p, topTip);
-        // } else {
-        //   angle = this.angleBetweenPoints(p, topTip);
-        // }
-        newShapePolar.push({ dist, angle });
-      });
-      // console.log(newShapePolar);
-
-      return newShapePolar;
     }
 
-    return false;
+    // translate shapes points into polar coordinates relative to bottom triangle
+    const topTip = bottom[0];
+    const scale = this.distBetweenPoints(bottom[0], bottom[1])
+    const newShapePolar = [];
+    newShape.forEach(v => {
+      newShapePolar.push(this.getPolar(v, topTip, bottomAngle, scale));
+    });
+
+    // Order by angle, break ties by distance to have a convex polygon
+    console.log('newShapePolar', newShapePolar);
+    newShapePolar.sort((v0, v1) => {
+      // We have to round or else the angles are slightly off
+      const a0 = this.round(v0.angle, 9);
+      const a1 = this.round(v1.angle, 9);
+
+      if (a0 === a1) { // if they are the same-ish, they are aligned
+        if (this.round(v0.angle, 0) === 1) { // if on right side of triangle, moving away
+          return v0.dist - v1.dist;
+        } else { // if on left side of triangle, moving towards
+          return v1.dist - v0.dist;
+        }
+      }
+      return v0.angle - v1.angle;
+    });
+    console.log('newShapePolar', newShapePolar);
+
+    return newShapePolar;
+  }
+
+  getPolar = (v, origin, originAngle, scale) => {
+    const dist = this.distBetweenPoints(v, origin) / scale;
+    const angle = -(Math.PI * (originAngle / 180)) + this.angleBetweenPoints(v, origin);
+    const polar = { dist, angle };
+    return polar;
+  }
+
+  // http://www.jacklmoore.com/notes/rounding-in-javascript/
+  round = (value, decimals) => {
+    return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
   }
 
   // Get interseting point of 2 line segments (if any)
@@ -383,13 +398,29 @@ export default class Overlay extends React.Component {
   }
 
   angleBetweenPoints = (p0, p1) => {
-    // console.log(p0.y-p1.y, p0.x-p1.x, Math.atan2(p0.y-p1.y, p0.x-p1.x));
     return Math.atan2(p0.y-p1.y, p0.x-p1.x);
+  }
+
+  onWindowResize = () => {
+    const node = ReactDOM.findDOMNode(this);
+    const container = node.parentNode.parentElement;
+    this.w = container.clientWidth;
+    this.scale = this.w;
+    this.canvas.clear();
+    this.canvas.setWidth(this.w);
+    this.canvas.setHeight(this.w * this.ratio);
+
+    // Keep track of renders to prevent old async renders from still happening (image load is async)
+    if (this.currentRenderIndex === undefined) {
+      this.currentRenderIndex = -1;
+    }
+    this.currentRenderIndex += 1;
+    this.renderPieces(this.currentRenderIndex);
   }
 
   render() {
     const { isRender } = this.props;
-    let filter = 'grayscale(100%) brightness(1.05) contrast(150%)';
+    let filter = 'grayscale(100%) brightness(1.05) contrast(125%)';
     if (isRender) {
       filter = 'none';
     }

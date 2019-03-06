@@ -6,20 +6,16 @@ import FormGroup from '@material-ui/core/FormGroup';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Switch from '@material-ui/core/Switch';
 
-import LoadFile from './LoadFile';
-import Overlay from './Overlay';
+import LoadFile from '../LoadFile';
+import CollageOverlay from './CollageOverlay';
 
 export default class Collage extends React.PureComponent {
-  // pieces={pieces}
-  // processedPieces={processedPieces}
-  // src={src}
   state = {
     target: null,
     isRender: false
   };
 
   render() {
-    console.log('selection collage');
     const { target, isRender } = this.state;
     const { pieces, processedPieces, placedPieces, onPiecePlacedUpdate, onSelectPiece, scale, updatePieceScale, savedPiecesData } = this.props;
 
@@ -33,11 +29,11 @@ export default class Collage extends React.PureComponent {
         <Grid item xs={12}>
           <div style={{ position: 'relative' }}>
             <div style={style}>
-              <LoadFile onLoad={target => this.setState({ target })} defaultImage="imgs/sketch4.png" />
+              <LoadFile onLoad={target => this.setState({ target })} defaultImage="imgs/sketch1.png" />
             </div>
             { !!target &&
-              (<div id="render" style={{ position: 'absolute', top: 0 }}>
-                <Overlay
+              (<div id="render" style={{ position: 'absolute', top: 0, width: '100%' }}>
+                <CollageOverlay
                   pieces={pieces}
                   processedPieces={processedPieces}
                   placedPieces={placedPieces}
@@ -50,29 +46,28 @@ export default class Collage extends React.PureComponent {
               </div>)
             }
           </div>
-          <div style={{ padding: '22px', marginTop: '22px' }}>
-            <FormGroup row>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={isRender}
-                    onChange={() => this.setState({ isRender: !isRender })}
-                    value="isRender"
-                    color="primary"
-                  />
-                }
-                label="Render"
-              />
-            </FormGroup>
-            <div style={{ marginTop: '22px' }}>
-                <Slider
-                  value={scale}
-                  aria-labelledby="scale"
-                  min={2}
-                  max={50}
-                  onChange={(event, value) => updatePieceScale(value)}
+          <div style={{ padding: '22px' }}>
+            <Grid container spacing={8}>
+              <Grid item xs={2}>
+                <Switch
+                  checked={isRender}
+                  onChange={() => this.setState({ isRender: !isRender })}
+                  value="isRender"
+                  color="primary"
                 />
-            </div>
+              </Grid>
+              <Grid item xs={10}>
+                <div style={{ marginTop: '22px', width: '100%' }}>
+                  <Slider
+                      value={scale}
+                      aria-labelledby="scale"
+                      min={0.003}
+                      max={0.05}
+                      onChange={(event, value) => updatePieceScale(value)}
+                    />
+                </div>
+              </Grid>
+            </Grid>
           </div>
         </Grid>
       </Grid>
